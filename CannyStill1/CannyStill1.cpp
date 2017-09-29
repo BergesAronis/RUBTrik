@@ -6,97 +6,222 @@
 
 #include<iostream>
 
-int low_h = 30, low_s = 30, low_v = 30;
-int high_h = 100, high_s = 100, high_v = 100;
+using namespace std;
+using namespace cv;
 
-///////////////////////////////////////////////////////////////////////////////////////////////////
-int main() {
-	cv::VideoCapture capWebcam(0);		// declare a VideoCapture object and associate to webcam, 0 => use 1st webcam
+char charCheckForEscKey;
 
-	if (capWebcam.isOpened() == false) {				// check if VideoCapture object was associated to webcam successfully
-		std::cout << "error: capWebcam not accessed successfully\n\n";	// if not, print error message to std out
-		return(0);														// and exit program
+Scalar BGRtoHSV(Scalar BGRColor)
+{
+	double hue;
+	double saturation;
+	double value;
+
+	double bPrime = BGRColor[0] / 255.0;
+	double gPrime = BGRColor[1] / 255.0;
+	double rPrime = BGRColor[2] / 255.0;
+	double cMin = min(min(bPrime, gPrime), rPrime);
+	double cMax = max(max(bPrime, gPrime), rPrime);
+	double delta = cMax - cMin;
+
+	if (delta == 0)
+		hue = 0;
+	else if (cMax == rPrime)
+	{
+		hue = (gPrime - bPrime) / delta;
+		if (gPrime < bPrime)
+			hue += 6;
+	}
+	else if (cMax == gPrime)
+		hue = ((bPrime - rPrime) / delta) + 2;
+	else
+		hue = ((rPrime - gPrime) / delta) + 4;
+	hue *= 60;
+	if (cMax == 0)
+		saturation = 0;
+	else
+		saturation = delta / cMax;
+
+	value = cMax;
+
+	return Scalar(hue, saturation, value);
+}
+
+Scalar determineColor(Scalar inputColor)
+{
+	Scalar HSV = BGRtoHSV(inputColor);
+	double H = HSV[0];
+	double S = HSV[1];
+	double V = HSV[2];
+
+	if (S < .30)
+	{
+		if (V > .50)
+			return Scalar(255, 255, 255);
+		else
+			return Scalar(0, 0, 0);
+	}
+	else
+	{
+		if ((H > 0 && H < 10) || (H > 330 && H < 360))
+		{
+			cout << "red";
+			return Scalar(0, 0, 255);
+		}
+		else if (H > 174 && H < 262)
+			return Scalar(255, 0, 0);
+		else if (H > 83 && H < 139)
+			return Scalar(0, 255, 0);
+		else if (H > 10 && H < 44)
+			return Scalar(0, 128, 255);
+		else if (H > 44 && H < 66)
+			return Scalar(0, 255, 255);
+		else
+			return Scalar(0, 0, 0);
+	}
+}
+
+class CubeSquare
+{ 
+	public:
+		Scalar color;
+		Point topLeft;
+		Point bottomRight;
+		int side;
+		int position;
+
+	CubeSquare()
+	{
+		color = NULL;
+		topLeft = Point(0, 0);
+		bottomRight = Point(0, 0);
+		position = 0;
 	}
 
-	cv::Mat imgOriginal;		// input image
-	cv::Mat imgHSV;
-	cv::Mat imgThreshLow;
-	cv::Mat imgThreshHigh;
-	cv::Mat imgThresh;
+	CubeSquare(int position0, int squareSize, int imageHeight, int imageWidth)
+	{
+		color = NULL;
+		position = position0;
+		int k = position % 9;
+		int j = k / 3;
+		int i = k % 3;
 
-	std::vector<cv::Vec3f> v3fCircles;				// 3 element vector of floats, this will be the pass by reference output of HoughCircles()
+		topLeft = Point(squareSize*i + imageWidth / 2.0 - (3 / 2.0)*squareSize, -squareSize*j + imageHeight / 2.0 + (3 / 2.0)*squareSize);
+		bottomRight = Point(squareSize*i + imageWidth / 2.0 - (1 / 2.0)*squareSize, -squareSize*j + imageHeight / 2.0 + (1 / 2.0)*squareSize);
+	}
 
-	char charCheckForEscKey = 0;
-
-	while (charCheckForEscKey != 27 && capWebcam.isOpened()) {		// until the Esc key is pressed or webcam connection is lost
-		bool blnFrameReadSuccessfully = capWebcam.read(imgOriginal);		// get next frame
-
-		if (!blnFrameReadSuccessfully || imgOriginal.empty()) {		// if frame not read successfully
-			std::cout << "error: frame not read from webcam\n";		// print error message to std out
-			break;													// and jump out of while loop
+};
+class Cube
+{
+	CubeSquare* squareHolder;
+	int currentSide;
+	int squareSize;
+	
+	public:
+	Cube()
+	{
+		squareHolder = new CubeSquare[54];
+		for (int i = 0; i < 54; i++)
+		{
+			squareHolder[i] = CubeSquare();
 		}
+		currentSide = 0;
+	}
 
-		cv::cvtColor(imgOriginal, imgHSV, CV_BGR2HSV);
+	Cube(int squareSize0, int imageHeight, int imageWidth)
+	{
+		squareSize = squareSize0;
+		squareHolder = new CubeSquare[54];
+		for (int i = 0; i < 54; i++)
+		{
+			squareHolder[i] = CubeSquare(i, squareSize, imageHeight, imageWidth);
+		}
+		currentSide = 0;
+	}
 
-		cv::createTrackbar("Low R", "Object Detection", &low_h, 255);
-		cv::createTrackbar("High R", "Object Detection", &high_h, 255);
-		cv::createTrackbar("Low G", "Object Detection", &low_s, 255);
-		cv::createTrackbar("High G", "Object Detection", &high_s, 255);
-		cv::createTrackbar("Low B", "Object Detection", &low_v, 255);
-		cv::createTrackbar("High B", "Object Detection", &high_v, 255);
+	void drawInputSquares(Mat frame)
+	{
+		int fill = 1;
+		Scalar fillColor = Scalar(0, 0, 255);
+		for (int i = currentSide * 9; i < (currentSide+1) * 9; i++)
+		{
+			if (squareHolder[i].color != Scalar(0, 0, 0))
+			{
+				fill = -1;
+				fillColor = squareHolder[i].color;
+			}
+			
+			rectangle(frame, squareHolder[i].topLeft, squareHolder[i].bottomRight, fillColor, fill);
+		}
+	}
 
-		cv::inRange(imgHSV, cv::Scalar(low_h, low_s, low_v), cv::Scalar(high_h, high_s, high_v), imgThresh);
+	void getColors(Mat frame)
+	{
+		Point centre;
+		int totalB;
+		int totalG;
+		int totalR;
 
-		cv::GaussianBlur(imgThresh, imgThresh, cv::Size(3, 3), 0);
+		for (int i = currentSide * 9; i < (currentSide + 1) * 9; i++)
+		{
+			totalB = 0;
+			totalG = 0;
+			totalR = 0;
 
-		cv::Mat structuringElement = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
+			centre = Point((squareHolder[i].topLeft.x + squareHolder[i].bottomRight.x) / 2.0, (squareHolder[i].topLeft.y + squareHolder[i].bottomRight.y) / 2.0);
+			for (int j = -1; j <= 1; j++)
+			{
+				for (int k = -1; k <= 1; k++)
+				{
+					Vec3b intensity = frame.at<Vec3b>(centre.y + (squareSize / 4.0)*j, centre.x + (squareSize/4.0)*k);
+					totalB += intensity.val[0];
+					totalG += intensity.val[1];
+					totalR += intensity.val[2];
+				}
+			}
 
-		cv::dilate(imgThresh, imgThresh, structuringElement);
-		cv::erode(imgThresh, imgThresh, structuringElement);
+			//if (i % 9 == 2)
+			//{
+			//	//string output = to_string(totalB / 9) + "," + to_string(totalG / 9) + "," + to_string(totalR / 9);
 
-		// fill circles vector with all circles in processed image
-		cv::HoughCircles(imgThresh,			// input image
-			v3fCircles,							// function output (must be a standard template library vector
-			CV_HOUGH_GRADIENT,					// two-pass algorithm for detecting circles, this is the only choice available
-			2,									// size of image / this value = "accumulator resolution", i.e. accum res = size of image / 2
-			imgThresh.rows / 4,				// min distance in pixels between the centers of the detected circles
-			100,								// high threshold of Canny edge detector (called by cvHoughCircles)						
-			50,									// low threshold of Canny edge detector (set at 1/2 previous value)
-			10,									// min circle radius (any circles with smaller radius will not be returned)
-			400);								// max circle radius (any circles with larger radius will not be returned)
+			//	//string output = to_string(HSV[0]) + "," + to_string(HSV[1]) + "," + to_string(HSV[2]);
+			//	//cout << output << endl;
+			//}
 
-		for (int i = 0; i < v3fCircles.size(); i++) {		// for each circle . . .
-			// show ball position x, y, and radius to command line
-			std::cout << "ball position x = " << v3fCircles[i][0]			// x position of center point of circle
-				<< ", y = " << v3fCircles[i][1]								// y position of center point of circle
-				<< ", radius = " << v3fCircles[i][2] << "\n";				// radius of circle
+			squareHolder[i].color = determineColor(Scalar(totalB / 9, totalG / 9, totalR / 9));
+		}
+	}
+};
 
-			// draw small green circle at center of detected object
-			cv::circle(imgOriginal,												// draw on original image
-				cv::Point((int)v3fCircles[i][0], (int)v3fCircles[i][1]),		// center point of circle
-				3,																// radius of circle in pixels
-				cv::Scalar(0, 255, 0),											// draw pure green (remember, its BGR, not RGB)
-				CV_FILLED);														// thickness, fill in the circle
+int main() {
+	VideoCapture capture(0);
+	int height = capture.get(CV_CAP_PROP_FRAME_HEIGHT);
+	int width = capture.get(CV_CAP_PROP_FRAME_WIDTH);
 
-			// draw red circle around the detected object
-			cv::circle(imgOriginal,												// draw on original image
-				cv::Point((int)v3fCircles[i][0], (int)v3fCircles[i][1]),		// center point of circle
-				(int)v3fCircles[i][2],											// radius of circle in pixels
-				cv::Scalar(0, 0, 255),											// draw pure red (remember, its BGR, not RGB)
-				3);																// thickness of circle in pixels
-		}	// end for
+	/* Create the window */
+	namedWindow("Rubix Solver", CV_WINDOW_AUTOSIZE);
 
-		// declare windows
-		cv::namedWindow("imgOriginal", CV_WINDOW_AUTOSIZE);	// note: you can use CV_WINDOW_NORMAL which allows resizing the window
-		cv::namedWindow("imgThresh", CV_WINDOW_AUTOSIZE);	// or CV_WINDOW_AUTOSIZE for a fixed size window matching the resolution of the image
-		cv::namedWindow("Object Detection", CV_WINDOW_NORMAL);
-		// CV_WINDOW_AUTOSIZE is the default
+	/* Frame container */
+	Mat frame;
 
-		cv::imshow("imgOriginal", imgOriginal);			// show windows
-		cv::imshow("imgThresh", imgThresh);
+	Cube cube = Cube(75, height, width);
 
-		charCheckForEscKey = cv::waitKey(1);			// delay (in ms) and get key press, if any
-	}	// end while
+	/* Global loop */
+	while (charCheckForEscKey != 27)
+	{
+		/* Capture the frame from the webcam */
+		capture >> frame;
+		if (frame.empty())
+			break;
 
+		cube.getColors(frame);
+		cube.drawInputSquares(frame);
+
+		/* Show the result */
+		imshow("Rubix Solver", frame);
+
+		/* Wait some milliseconds */
+		charCheckForEscKey = cv::waitKey(1);
+	}
 	return(0);
 }

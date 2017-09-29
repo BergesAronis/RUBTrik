@@ -1,3 +1,9 @@
 ﻿  CannyStill1.cpp
-  CannyStill1.vcxproj -> c:\users\berges\documents\visual studio 2015\Projects\CannyStill1\x64\Debug\CannyStill1.exe
-  CannyStill1.vcxproj -> c:\users\berges\documents\visual studio 2015\Projects\CannyStill1\x64\Debug\CannyStill1.pdb (Partial PDB)
+c:\users\carter pearson\documents\github\rubtrik\cannystill1\cannystill1.cpp(109): warning C4244: 'argument': conversion from 'double' to 'int', possible loss of data
+c:\users\carter pearson\documents\github\rubtrik\cannystill1\cannystill1.cpp(110): warning C4244: 'argument': conversion from 'double' to 'int', possible loss of data
+c:\users\carter pearson\documents\github\rubtrik\cannystill1\cannystill1.cpp(171): warning C4244: 'argument': conversion from 'double' to 'int', possible loss of data
+c:\users\carter pearson\documents\github\rubtrik\cannystill1\cannystill1.cpp(176): warning C4244: 'argument': conversion from 'double' to 'int', possible loss of data
+c:\users\carter pearson\documents\github\rubtrik\cannystill1\cannystill1.cpp(198): warning C4244: 'initializing': conversion from 'double' to 'int', possible loss of data
+c:\users\carter pearson\documents\github\rubtrik\cannystill1\cannystill1.cpp(199): warning C4244: 'initializing': conversion from 'double' to 'int', possible loss of data
+  CannyStill1.vcxproj -> C:\Users\Carter Pearson\Documents\GitHub\RUBTrik\CannyStill1\x64\Debug\CannyStill1.exe
+  CannyStill1.vcxproj -> C:\Users\Carter Pearson\Documents\GitHub\RUBTrik\CannyStill1\x64\Debug\CannyStill1.pdb (Partial PDB)
